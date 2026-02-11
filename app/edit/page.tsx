@@ -20,6 +20,7 @@ export default function EditProfilePage() {
     const id = params.id as string;
     if (id) {
       const savedProfile = ProfileStorage.getProfile(id);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Valid pattern for loading client-side data on mount
       setProfile(savedProfile);
     }
     setLoading(false);

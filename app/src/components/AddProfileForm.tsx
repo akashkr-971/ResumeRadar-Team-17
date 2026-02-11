@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Profile, Experience, Education, Project, Certification } from "../types/profile";
-import { Plus, Trash2, X, Briefcase, GraduationCap, Code, Award, Globe, Calendar, AlertCircle } from "lucide-react";
+import { Plus, Trash2, X, Briefcase, GraduationCap, Code, Award, Globe, AlertCircle } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
 interface AddProfileFormProps {
@@ -386,7 +386,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
     }]);
   };
 
-  const updateExperience = (id: string, field: keyof Experience, value: any) => {
+  const updateExperience = (id: string, field: keyof Experience, value: Experience[keyof Experience]) => {
     setExperiences(experiences.map(exp => 
       exp.id === id ? { ...exp, [field]: value } : exp
     ));
@@ -454,7 +454,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
     }]);
   };
 
-  const updateEducation = (id: string, field: keyof Education, value: any) => {
+  const updateEducation = (id: string, field: keyof Education, value: Education[keyof Education]) => {
     setEducations(educations.map(edu => 
       edu.id === id ? { ...edu, [field]: value } : edu
     ));
@@ -488,7 +488,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
     }]);
   };
 
-  const updateProject = (id: string, field: keyof Project, value: any) => {
+  const updateProject = (id: string, field: keyof Project, value: Project[keyof Project]) => {
     setProjects(projects.map(proj => 
       proj.id === id ? { ...proj, [field]: value } : proj
     ));
@@ -513,7 +513,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
     }]);
   };
 
-  const updateCertification = (id: string, field: keyof Certification, value: any) => {
+  const updateCertification = (id: string, field: keyof Certification, value: Certification[keyof Certification]) => {
     setCertifications(certifications.map(cert => 
       cert.id === id ? { ...cert, [field]: value } : cert
     ));
@@ -536,8 +536,8 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
     { id: "additional", label: "Additional", icon: "➕" },
   ];
 
-  // Error message component
-  const ErrorMessage = ({ errorKey }: { errorKey: string }) => {
+  // Error message helper function
+  const renderErrorMessage = (errorKey: string) => {
     const error = errors[errorKey];
     if (!error) return null;
     
@@ -608,7 +608,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                 }`}
                 placeholder="John Doe"
               />
-              <ErrorMessage errorKey="fullName" />
+              {renderErrorMessage("fullName")}
             </div>
 
             <div>
@@ -632,7 +632,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                 }`}
                 placeholder="john@example.com"
               />
-              <ErrorMessage errorKey="email" />
+              {renderErrorMessage("email")}
             </div>
 
             <div>
@@ -656,7 +656,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                 }`}
                 placeholder="+1 (555) 123-4567"
               />
-              <ErrorMessage errorKey="phone" />
+              {renderErrorMessage("phone")}
             </div>
 
             <div>
@@ -680,7 +680,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                 }`}
                 placeholder="San Francisco, CA"
               />
-              <ErrorMessage errorKey="location" />
+              {renderErrorMessage("location")}
             </div>
 
             <div>
@@ -762,7 +762,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                     }`}
                     placeholder="Google"
                   />
-                  <ErrorMessage errorKey={`exp_${index}_company`} />
+                  {renderErrorMessage(`exp_${index}_company`)}
                 </div>
 
                 <div>
@@ -779,7 +779,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                     }`}
                     placeholder="Senior Software Engineer"
                   />
-                  <ErrorMessage errorKey={`exp_${index}_position`} />
+                  {renderErrorMessage(`exp_${index}_position`)}
                 </div>
 
                 <div>
@@ -795,7 +795,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                       errors[`exp_${index}_startDate`] ? 'border-red-500' : 'border-slate-300'
                     }`}
                   />
-                  <ErrorMessage errorKey={`exp_${index}_startDate`} />
+                  {renderErrorMessage(`exp_${index}_startDate`)}
                 </div>
 
                 <div>
@@ -831,7 +831,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                       <span className="text-sm">Current</span>
                     </label>
                   </div>
-                  <ErrorMessage errorKey={`exp_${index}_endDate`} />
+                  {renderErrorMessage(`exp_${index}_endDate`)}
                 </div>
 
                 <div className="md:col-span-2">
@@ -923,7 +923,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                     }`}
                     placeholder="Stanford University"
                   />
-                  <ErrorMessage errorKey={`edu_${index}_institution`} />
+                  {renderErrorMessage(`edu_${index}_institution`)}
                 </div>
 
                 <div>
@@ -940,7 +940,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                     }`}
                     placeholder="Bachelor of Science"
                   />
-                  <ErrorMessage errorKey={`edu_${index}_degree`} />
+                  {renderErrorMessage(`edu_${index}_degree`)}
                 </div>
 
                 <div>
@@ -957,7 +957,7 @@ const removeProjectTechnology = (projectId: string, tech: string) => {
                     }`}
                     placeholder="Computer Science"
                   />
-                  <ErrorMessage errorKey={`edu_${index}_field`} />
+                  {renderErrorMessage(`edu_${index}_field`)}
                 </div>
 
                 <div>

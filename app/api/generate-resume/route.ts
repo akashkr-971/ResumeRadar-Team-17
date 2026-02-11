@@ -1,343 +1,248 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Profile } from "../../src/types/profile";
-import { generateModernLatex, generateFallbackLatex } from "../../src/lib/latex-templates";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      profile,
-      jobDescription,
-      targetRole,
-      targetCompany,
-      additionalInstructions,
-      useAI = true,
-    }: {
-      profile: Profile;
-      jobDescription: string;
-      targetRole: string;
-      targetCompany: string;
-      additionalInstructions: string;
-      useAI?: boolean;
-    } = body;
+    const { profile, jobDescription, targetRole } = body;
 
-    // If AI is disabled or not available, use template
-    if (!useAI) {
-      const latex = generateModernLatex(profile, targetRole);
-      return NextResponse.json({ latex, source: "template" });
+    if (!profile || !targetRole) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    try {
-      // Try AI generation first
-      const latex = await generateWithAI(
-        profile,
-        jobDescription,
-        targetRole,
-        targetCompany,
-        additionalInstructions
-      );
-      return NextResponse.json({ latex, source: "ai" });
-    } catch (aiError) {
-      console.warn("AI generation failed, falling back to template:", aiError);
-      
-      // Fallback to template
-      const latex = generateModernLatex(profile, targetRole);
-      return NextResponse.json({ 
-        latex, 
-        source: "template",
-        warning: "AI generation unavailable, using template"
-      });
-    }
+    const content = await generateWithAI(profile, jobDescription, targetRole);
+    const safeLatex = wrapLatex(content);
+
+    return NextResponse.json({ latex: safeLatex, source: "ai" });
+
   } catch (error) {
-    console.error("Error generating resume:", error);
-    return NextResponse.json(
-      { error: "Failed to generate resume" },
-      { status: 500 }
-    );
+    console.error("Resume Generation Error:", error);
+    return NextResponse.json({ error: "Resume generation failed" }, { status: 500 });
   }
 }
 
 async function generateWithAI(
   profile: Profile,
   jobDescription: string,
-  targetRole: string,
-  targetCompany: string,
-  additionalInstructions: string
+  targetRole: string
 ): Promise<string> {
-  const prompt = createResumePrompt(
-    profile,
-    jobDescription,
-    targetRole,
-    targetCompany,
-    additionalInstructions
-  );
 
+  const prompt = createResumePrompt(profile, jobDescription, targetRole);
   const ollamaHost = process.env.OLLAMA_HOST || "http://localhost:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "mistral:latest";
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+  const response = await fetch(`${ollamaHost}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.OLLAMA_MODEL || "mistral:latest",
+      prompt,
+      stream: false,
+    }),
+  });
 
-  try {
-    const ollamaResponse = await fetch(`${ollamaHost}/api/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ollamaModel,
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: parseFloat(process.env.OLLAMA_TEMPERATURE || "0.7"),
-          num_predict: parseInt(process.env.OLLAMA_NUM_PREDICT || "4000"),
-        },
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!ollamaResponse.ok) {
-      throw new Error(`Ollama API error: ${ollamaResponse.status}`);
-    }
-
-    const data = await ollamaResponse.json();
-    let latexCode = data.response;
-
-    // Extract and clean LaTeX code
-    latexCode = extractLatexFromResponse(latexCode);
-    latexCode = cleanLatexCode(latexCode);
-
-    // Validate LaTeX
-    if (!isValidLatex(latexCode)) {
-      throw new Error("Generated LaTeX is invalid");
-    }
-
-    return latexCode;
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("AI generation timed out");
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+  if (!response.ok) {
+    throw new Error("AI request failed");
   }
+
+  const data = await response.json();
+  return sanitizeContent(data.response);
 }
 
 function createResumePrompt(
   profile: Profile,
   jobDescription: string,
-  targetRole: string,
-  targetCompany: string,
-  additionalInstructions: string
+  targetRole: string
 ): string {
-  // Calculate years of experience
-  const yearsExp = profile.experience?.length ? Math.max(profile.experience.length, 2) : 2;
-  
-  return `You are an expert resume writer and LaTeX specialist. Create a professional, ATS-optimized resume in LaTeX format.
+  return `
+Generate ONLY the resume CONTENT (NO preamble).
 
-**CRITICAL REQUIREMENTS:**
-1. Return ONLY valid LaTeX code - no explanations, no markdown, no extra text
-2. Use \\documentclass[11pt,a4paper]{article}
-3. Include essential packages: geometry, enumitem, hyperref, xcolor, fontawesome5
-4. Make it clean, modern, and ATS-friendly
-5. Optimize for keywords from the job description
-6. Use bullet points for achievements (start with action verbs)
-7. Keep to 1-2 pages maximum
-8. Use proper LaTeX escaping for special characters
-9. MUST include a Professional Summary section at the top
-10. Include ALL sections with actual content from the profile
+DO NOT include:
+- \\documentclass
+- \\usepackage
+- \\hypersetup
+- \\begin{document}
+- \\end{document}
 
-**LATEX STRUCTURE:**
-- Start with \\documentclass
-- Include all necessary \\usepackage statements
-- Set up geometry (margins around 1.5cm)
-- Define custom colors if needed
-- Create header with name and contact info
-- IMPORTANT: Add Professional Summary section first (3-4 sentences highlighting experience and skills)
-- Organize sections: Professional Summary, Experience, Education, Skills, Projects, Certifications
-- End with \\end{document}
+Use only:
+- \\section*{}
+- \\textbf{}
+- \\begin{itemize}
+- \\item
+- \\href{https://...}{text}
 
-**PROFILE DATA:**
+Profile:
 Name: ${profile.fullName}
 Email: ${profile.email}
 Phone: ${profile.phone}
 Location: ${profile.location}
-${profile.linkedin ? `LinkedIn: ${profile.linkedin}` : ""}
-${profile.portfolio ? `Portfolio: ${profile.portfolio}` : ""}
-${profile.github ? `GitHub: ${profile.github}` : ""}
+LinkedIn: ${profile.linkedin || ""}
+GitHub: ${profile.github || ""}
+Portfolio: ${profile.portfolio || ""}
 
-**TARGET POSITION:** ${targetRole}
-${targetCompany ? `**TARGET COMPANY:** ${targetCompany}` : ""}
+Target Role: ${targetRole}
 
-**PROFESSIONAL SUMMARY TO WRITE:**
-Write a compelling 3-4 sentence professional summary that:
-- Highlights ${yearsExp}+ years of experience in the field
-- Mentions top 3-5 technical skills from: ${profile.technicalSkills?.slice(0, 5).join(", ") || "relevant technologies"}
-- Emphasizes achievements and impact
-- Aligns with the target role of ${targetRole}
-- Uses strong action words and quantifiable achievements
+Job Description:
+${jobDescription}
 
-${jobDescription ? `**JOB DESCRIPTION (optimize for these keywords):**\n${jobDescription}\n` : ""}
+Structure:
 
-**PROFESSIONAL EXPERIENCE:**
-${profile.experience
-  ?.map(
-    (exp: any, idx: number) => `
-${idx + 1}. ${exp.position} | ${exp.company} | ${exp.location}
-   ${exp.startDate} - ${exp.current ? "Present" : exp.endDate}
-   Achievements:
-${exp.description.filter((d: string) => d.trim()).map((desc: string) => `   - ${desc}`).join("\n")}
-   Technologies: ${exp.technologies.join(", ")}
-`
-  )
-  .join("\n") || "No experience listed"}
+\\begin{center}
+NAME
+contact line
+\\end{center}
 
-**EDUCATION:**
-${profile.education
-  ?.map(
-    (edu: any) => `
-- ${edu.degree} in ${edu.field}
-  ${edu.institution}, ${edu.location}
-  ${edu.startDate} - ${edu.current ? "Present" : edu.endDate}
-  ${edu.gpa ? `GPA: ${edu.gpa}` : ""}
-`
-  )
-  .join("\n") || "No education listed"}
+\\section*{Professional Summary}
 
-**TECHNICAL SKILLS:**
-${profile.technicalSkills?.join(", ") || "None"}
+\\section*{Experience}
 
-**SOFT SKILLS:**
-${profile.softSkills?.join(", ") || "None"}
+\\section*{Education}
 
-${
-  profile.projects && profile.projects.length > 0
-    ? `**KEY PROJECTS:**
-${profile.projects
-  .map(
-    (proj: any) => `
-- ${proj.name}
-  ${proj.description}
-  Technologies: ${proj.technologies.join(", ")}
-  ${proj.link ? `Link: ${proj.link}` : ""}
-  ${proj.startDate ? `Duration: ${proj.startDate} - ${proj.endDate || "Present"}` : ""}
-`
-  )
-  .join("\n")}`
-    : ""
+\\section*{Skills}
+
+\\section*{Projects}
+
+Return ONLY valid LaTeX body content.
+`;
 }
 
-${
-  profile.certifications && profile.certifications.length > 0
-    ? `**CERTIFICATIONS:**
-${profile.certifications
-  .map(
-    (cert: any) => `
-- ${cert.name} | ${cert.issuer} | ${cert.issueDate}
-  ${cert.credentialId ? `Credential ID: ${cert.credentialId}` : ""}
-  ${cert.link ? `Verify: ${cert.link}` : ""}
-`
-  )
-  .join("\n")}`
-    : ""
+/* 
+   Only clean content-level issues.
+   DO NOT sanitize infrastructure anymore.
+*/
+function sanitizeContent(content: string): string {
+  if (!content) return "";
+
+  content = content
+    .replace(/```latex?/gi, "")
+    .replace(/```/g, "")
+    .replace(/\\hrefdefaultcolor/g, "")
+    .replace(/\\hrefcolor/g, "")
+    .replace(/\\newcommand/g, "")
+    .replace(/\\moderncv/g, "")
+    .trim();
+
+  content = fixLonelyItems(content);
+  content = balanceEnvironments(content);
+
+  return content;
 }
 
-${profile.languages && profile.languages.length > 0 ? `**LANGUAGES:** ${profile.languages.join(", ")}` : ""}
+function fixLonelyItems(latex: string): string {
+  const lines = latex.split("\n");
+  let fixed: string[] = [];
+  let insideList = false;
+  let indentLevel = 0; // Track nesting depth
 
-${profile.achievements && profile.achievements.length > 0 ? `**ACHIEVEMENTS:**\n${profile.achievements.map((a: string) => `- ${a}`).join("\n")}` : ""}
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
 
-${additionalInstructions ? `**SPECIAL INSTRUCTIONS:**\n${additionalInstructions}` : ""}
+    // Check if we're explicitly starting/ending a list
+    if (trimmed.startsWith("\\begin{itemize}")) {
+      insideList = true;
+      indentLevel++;
+      fixed.push(line);
+      continue;
+    }
 
-**FORMATTING GUIDELINES:**
-- Use professional fonts and clean layout
-- Include icons for contact info (\\faEnvelope, \\faPhone, \\faMapMarker, \\faLinkedin, \\faGithub)
-- Use \\textbf{} for emphasis
-- Use \\section{} for main sections (Professional Summary, Experience, Education, Skills, Projects, Certifications)
-- Use itemize environment for bullet points with [leftmargin=*,itemsep=2pt]
-- Add proper spacing between sections (\\vspace{})
-- Make section headers stand out with color or lines
-- Ensure all special characters are properly escaped (%, &, $, #, _, {, })
-- Use \\href{url}{text} for links
+    if (trimmed.startsWith("\\end{itemize}")) {
+      insideList = indentLevel > 1; // Still inside if nested
+      indentLevel = Math.max(0, indentLevel - 1);
+      fixed.push(line);
+      continue;
+    }
 
-**EXAMPLE STRUCTURE:**
-\\documentclass[11pt,a4paper]{article}
-\\usepackage[utf8]{inputenc}
-\\usepackage[margin=1.5cm]{geometry}
-\\usepackage{enumitem}
-\\usepackage{hyperref}
-\\usepackage{xcolor}
-\\usepackage{fontawesome5}
-
-\\begin{document}
-
-% Header with name and contact
-% Professional Summary section (REQUIRED - 3-4 sentences)
-% Experience section with bullet points
-% Education section
-% Skills section
-% Projects section (if applicable)
-% Certifications section (if applicable)
-
-\\end{document}
-
-Generate the complete LaTeX code now. Return ONLY the LaTeX code, nothing else. Make sure to include the Professional Summary section with compelling content based on the profile data.`;
-}
-
-function extractLatexFromResponse(response: string): string {
-  // Remove markdown code blocks
-  let latex = response.replace(/```latex?\n?/gi, "").replace(/```\n?/g, "");
-
-  // Find LaTeX document
-  const docMatch = latex.match(/\\documentclass[\s\S]*?\\end\{document\}/);
-  if (docMatch) {
-    return docMatch[0];
+    // If we encounter an \item
+    if (trimmed.startsWith("\\item")) {
+      if (!insideList) {
+        // Start a new list before this orphaned item
+        fixed.push("\\begin{itemize}");
+        insideList = true;
+        indentLevel = 1;
+      }
+      fixed.push(line);
+    } else {
+      // Non-item line
+      // Close list if we hit a section or other structural element
+      if (insideList && indentLevel === 1) {
+        // Check if this is a structural break (section, empty line pattern, etc.)
+        if (trimmed.startsWith("\\section") || 
+            trimmed.startsWith("\\subsection") ||
+            trimmed.startsWith("\\begin{center}") ||
+            trimmed.startsWith("\\end{center}") ||
+            (trimmed === "" && i > 0 && !lines[i-1].trim().startsWith("\\item"))) {
+          fixed.push("\\end{itemize}");
+          insideList = false;
+          indentLevel = 0;
+        }
+      }
+      fixed.push(line);
+    }
   }
+
+  // Close any remaining open lists
+  while (indentLevel > 0) {
+    fixed.push("\\end{itemize}");
+    indentLevel--;
+  }
+
+  return fixed.join("\n");
+}
+
+function balanceEnvironments(latex: string): string {
+  const envs = ["itemize", "enumerate", "center"];
+
+  envs.forEach(env => {
+    const beginRegex = new RegExp(`\\\\begin\\{${env}\\}`, "g");
+    const endRegex = new RegExp(`\\\\end\\{${env}\\}`, "g");
+    
+    const beginCount = (latex.match(beginRegex) || []).length;
+    const endCount = (latex.match(endRegex) || []).length;
+
+    if (beginCount > endCount) {
+      const missing = beginCount - endCount;
+      for (let i = 0; i < missing; i++) {
+        latex += `\n\\end{${env}}`;
+      }
+    } else if (endCount > beginCount) {
+      // Remove extra \end{} tags
+      const excess = endCount - beginCount;
+      for (let i = 0; i < excess; i++) {
+        latex = latex.replace(endRegex, "");
+      }
+    }
+  });
 
   return latex;
 }
 
-function cleanLatexCode(latex: string): string {
-  // Remove any text before \documentclass
-  const docStart = latex.indexOf("\\documentclass");
-  if (docStart > 0) {
-    latex = latex.substring(docStart);
-  }
 
-  // Remove any text after \end{document}
-  const docEnd = latex.lastIndexOf("\\end{document}");
-  if (docEnd > -1) {
-    latex = latex.substring(0, docEnd + "\\end{document}".length);
-  }
+/*
+   YOU control the preamble.
+   This never changes.
+*/
+function wrapLatex(content: string): string {
+  return `
+\\documentclass[11pt,a4paper]{article}
 
-  // Ensure proper document structure
-  if (!latex.includes("\\begin{document}")) {
-    const insertPoint = latex.indexOf("\\documentclass");
-    if (insertPoint > -1) {
-      const endOfPreamble = latex.indexOf("\n\n", insertPoint + 100);
-      if (endOfPreamble > -1) {
-        latex =
-          latex.substring(0, endOfPreamble) +
-          "\n\n\\begin{document}\n" +
-          latex.substring(endOfPreamble);
-      }
-    }
-  }
+\\usepackage[margin=1.5cm]{geometry}
+\\usepackage{enumitem}
+\\usepackage{hyperref}
+\\usepackage{xcolor}
 
-  if (!latex.includes("\\end{document}")) {
-    latex += "\n\\end{document}";
-  }
-
-  return latex.trim();
+\\hypersetup{
+  colorlinks=true,
+  urlcolor=blue,
+  linkcolor=blue
 }
 
-function isValidLatex(latex: string): boolean {
-  // Basic validation
-  const hasDocClass = latex.includes("\\documentclass");
-  const hasBeginDoc = latex.includes("\\begin{document}");
-  const hasEndDoc = latex.includes("\\end{document}");
-  const isNotEmpty = latex.length > 100;
+\\setlength{\\parindent}{0pt}
+\\setlength{\\parskip}{4pt}
 
-  return hasDocClass && hasBeginDoc && hasEndDoc && isNotEmpty;
+\\begin{document}
+
+${content}
+
+\\end{document}
+`.trim();
 }

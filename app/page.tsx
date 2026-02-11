@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Target, ShieldCheck, Zap, Download, CheckCircle, Sparkles, Users, Award, ArrowRight, Mail, Linkedin, Twitter, Github } from "lucide-react";
+import { Target, ShieldCheck, Download, CheckCircle, Sparkles, Users, Award, ArrowRight } from "lucide-react";
 import Navbar from "./src/components/navbar";
 import Footer from "./src/components/footer";
 
@@ -105,7 +105,7 @@ export default function Home() {
               </div>
               <h3 className="text-2xl font-bold mb-4">ATS Suggestion Engine</h3>
               <p className="text-slate-600 leading-relaxed mb-6">
-                Real-time ATS scoring with actionable suggestions to improve your resume's chances of getting noticed.
+              Real-time ATS scoring with actionable suggestions to improve your resume&apos;s chances of getting noticed.
               </p>
               <ul className="space-y-2">
                 <li className="flex items-center gap-2 text-slate-700">

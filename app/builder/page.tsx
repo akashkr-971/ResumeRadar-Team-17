@@ -5,7 +5,7 @@ import AddProfileForm from "../src/components/AddProfileForm";
 import { Profile } from "../src/types/profile";
 import Navbar from "../src/components/navbar";
 import Footer from "../src/components/footer";
-import { UserPlus, Users, FileText, Edit2, Trash2, Plus, ArrowRight, Sparkles, Briefcase, GraduationCap, Mail, Phone, Code, Award, Globe, Calendar, ExternalLink } from "lucide-react";
+import { UserPlus, Users, FileText, Edit2, Trash2, Plus, ArrowRight, Sparkles, Briefcase, GraduationCap, Mail, Code, Globe } from "lucide-react";
 import Link from "next/link";
 import { ProfileStorage } from "../src/lib/profilestore";
 
@@ -17,6 +17,7 @@ export default function BuilderPage() {
   // Load profiles from localStorage on mount
   useEffect(() => {
     const savedProfiles = ProfileStorage.getAllProfiles();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Valid pattern for loading client-side data on mount
     setProfiles(savedProfiles);
   }, []);
 
