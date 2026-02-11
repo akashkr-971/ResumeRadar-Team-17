@@ -123,6 +123,35 @@ your-project/
 - **localStorage** - Client-side profile storage
 - **File System** - Temporary LaTeX compilation
 
+### 🧪 Test Cases
+Test Case 1: Job Role-Based Resume Generation
+Input:
+Education: B.Tech Computer Science
+Skills: Python, SQL
+Job Role: Data Analyst
+Expected Output:
+Resume generated with job-specific summary
+Relevant skills highlighted
+
+Test Case 2: ATS Score Evaluation
+Input: Resume without SQL keyword
+Job Description requires SQL
+Expected Output:
+ATS Score below 70%
+Risk factor: Missing SQL skill
+
+Test Case 3: Job Probability Prediction
+Input: Strong matching resume + matching JD
+Expected Output:
+Job probability above 80%
+Low recruiter risk
+
+Test Case 4: Personal Branding Score
+Input: GitHub with 2 repos and low activity
+Expected Output:
+Low GitHub score
+Suggestion to improve project consistency
+
 ## 📖 Documentation
 
 - **[Installation Guide](docs/LATEX_SETUP.md)** - Complete setup instructions
