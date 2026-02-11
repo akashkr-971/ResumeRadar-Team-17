@@ -12,7 +12,7 @@ export default function Footer() {
               <div className="p-2 bg-white rounded-xl">
                 <Zap className="text-blue-600" size={24} />
               </div>
-              <span className="text-2xl font-bold">RESUMEAID</span>
+              <span className="text-2xl font-bold">RESUMERADAR</span>
             </div>
             <p className="text-slate-400 leading-relaxed">
               AI-powered resume building and analysis platform helping professionals land their dream jobs.
@@ -74,7 +74,7 @@ export default function Footer() {
                   href="mailto:support@resumeaid.com" 
                   className="hover:text-white transition-colors"
                 >
-                  support@resumeaid.com
+                  support@resumeradar.com
                 </a>
               </li>
               <li>24/7 Support Available</li>
